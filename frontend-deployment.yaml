@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    meta.helm.sh/release-name: todo-app
+    meta.helm.sh/release-namespace: default
+  creationTimestamp: "2026-01-21T08:37:12Z"
+  generation: 1
+  labels:
+    app: frontend
+    app.kubernetes.io/instance: todo-app
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: todo-app
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: todo-app-0.1.0
+  name: todo-app-frontend
+  namespace: default
+  resourceVersion: "7848"
+  uid: 7e84bdee-bb08-4509-a99f-81feb17f1d2b
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: frontend
+      app.kubernetes.io/instance: todo-app
+      app.kubernetes.io/name: todo-app
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: frontend
+        app.kubernetes.io/instance: todo-app
+        app.kubernetes.io/name: todo-app
+    spec:
+      containers:
+      - env:
+        - name: NEXT_PUBLIC_BACKEND_URL
+          value: http://todo-app-backend:8000
+        image: todo-frontend:v1
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          successThreshold: 1
+          timeoutSeconds: 1
+        name: frontend
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 3000
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 1
+        resources:
+          limits:
+            cpu: 500m
+            memory: 512Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      terminationGracePeriodSeconds: 30
+status:
+  conditions:
+  - lastTransitionTime: "2026-01-21T08:37:14Z"
+    lastUpdateTime: "2026-01-21T08:37:14Z"
+    message: Deployment does not have minimum availability.
+    reason: MinimumReplicasUnavailable
+    status: "False"
+    type: Available
+  - lastTransitionTime: "2026-01-21T08:47:15Z"
+    lastUpdateTime: "2026-01-21T08:47:15Z"
+    message: ReplicaSet "todo-app-frontend-76d9cc5fb9" has timed out progressing.
+    reason: ProgressDeadlineExceeded
+    status: "False"
+    type: Progressing
+  observedGeneration: 1
+  replicas: 1
+  unavailableReplicas: 1
+  updatedReplicas: 1

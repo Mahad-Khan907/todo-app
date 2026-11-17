@@ -1,28 +1,26 @@
 <!--
 SYNC IMPACT REPORT:
-- Version change: 1.3.0 → 2.0.0
-- Modified sections: Project Overview, Technical Stack, Core Rules, Implementation Workflow
-- Added sections: Containerization Requirements, Orchestration Requirements, AIOps Integration
+- Version change: 2.0.0 → 2.1.0
+- Modified sections: Project Overview, Technical Stack, Core Rules
+- Added sections: Recurring Tasks & Real-time Features, AI System Prompt Enhancement, Phase 5 Specific Structure
 - Templates requiring updates: ⚠ plan-template.md, ⚠ spec-template.md, ⚠ tasks-template.md
 - Follow-up TODOs: None
 -->
 
-# Project Constitution: Todo AI Chatbot (Phase 4)
+# Project Constitution: Todo AI Chatbot (Phase 5)
 
 ## Project Overview
 
 ### Project Mission
-This project is an evolution of a Todo Web App. Phase 3 (AI Chatbot with MCP Integration) is COMPLETE. Phase 4 focuses on transitioning the Todo AI Chatbot into a Cloud-Native application using containerization, Kubernetes orchestration, and AIOps tools. The engineer acts as a "System Architect," using AI to build complex software without writing boilerplate code.
+This project is an evolution of a Todo Web App. Phase 4 (Cloud-Native Deployment with Kubernetes) is COMPLETE. Phase 5 focuses on implementing advanced features including **Recurring Tasks**, **Real-time Reminders**, **Enhanced AI Capabilities**, and full cloud-native deployment using containerization, Kubernetes orchestration, and AIOps tools. The engineer acts as a "System Architect," using AI to build complex software without writing boilerplate code.
 
-## Technical Stack (Phase 4 Integration)
+## Technical Stack (Phase 5 Integration)
 
 ### Containerization
 - **Container Runtime**: Docker (Docker Desktop)
 - **Docker AI**: Docker AI Agent (Gordon) for AI-assisted container operations
 - **Image Management**: Automated container builds with multi-stage Dockerfiles for both frontend and backend
-
-### Orchestration
-- **Platform**: Kubernetes via Minikube (local cluster)
+- **Orchestration Platform**: Kubernetes via Minikube (local cluster)
 - **Package Management**: Helm Charts for deployment packaging
 - **Cluster Management**: kubectl-ai and Kagent for AI-assisted Kubernetes operations
 
@@ -32,7 +30,8 @@ This project is an evolution of a Todo Web App. Phase 3 (AI Chatbot with MCP Int
 - **Framework**: FastAPI (High-performance REST API)
 - **AI Logic**: OpenAI Agents SDK + Official MCP SDK
 - **MCP Server**: Integrated into FastAPI to expose Task operations as tools
-- **Database**: Neon Serverless PostgreSQL (SQLModel ORM)
+- **Database**: Neon Serverless PostgreSQL (SQLModel ORM) with recurring tasks and reminder fields
+- **Background Processing**: APScheduler or similar for triggering reminders and recurring tasks
 - **Auth**: JWT-based security using `python-jose` - AI must be protected by existing auth
 
 ### Frontend (UI Layer)
@@ -41,13 +40,13 @@ This project is an evolution of a Todo Web App. Phase 3 (AI Chatbot with MCP Int
 - **Styling**: Tailwind CSS (Premium Dark Theme) + Shadcn/UI
 - **State**: TanStack Query (Server-state management)
 - **Auth**: Better Auth integration
-- **AI Interface**: OpenAI ChatKit integrated into the existing Dashboard theme
+- **AI Interface**: OpenAI ChatKit integrated into the existing Dashboard theme with enhanced notification capabilities
 
-## Phase 4 Core Rules
+## Phase 5 Core Rules
 
 ### 1. Spec-Driven Development
 - Every feature must have a Markdown Constitution and Spec before implementation
-- New specifications must be stored in `specs/004-kubernetes-deployment/`
+- New specifications must be stored in `specs/004-phase-5-deployment/`
 - All changes must follow the refinement loop until correct output is generated
 
 ### 2. No Manual Coding Constraint
@@ -64,52 +63,63 @@ This project is an evolution of a Todo Web App. Phase 3 (AI Chatbot with MCP Int
 - Both the frontend (Next.js) and backend (FastAPI/MCP) must be containerized
 - Separate containers for frontend and backend services
 - Proper environment variable management for containerized applications
+- Production-ready Dockerfiles for both services using multi-stage builds
 
 ### 5. Local Cluster Deployment
 - The system must be deployed locally on Minikube
 - All services must be orchestrated via Kubernetes
 - Service discovery and networking must follow Kubernetes patterns
+- Services configured for Minikube (NodePort/LoadBalancer)
 
-### 6. Conversational Interface Preservation
+### 6. Advanced Features Implementation
+- **Recurring Tasks**: Implement recurring_interval field in database model
+- **Real-time Reminders**: Implement reminder_at and last_notified fields
+- **Background Worker**: Implement APScheduler or similar for triggering reminders and recurring task instances
+- **Enhanced AI**: Update AI system prompt to handle recurrence parsing and immediate scheduling
+
+### 7. Conversational Interface Enhancement
 - The chatbot must maintain its functionality via the OpenAI Agents SDK and MCP server
-- Existing AI capabilities must remain intact after containerization
-- Authentication and security layers must be preserved
+- Enhanced AI capabilities for proactive task management
+- Updated system prompt to handle "Every Friday at 5 PM" (Recurrence parsing) and "Remind me in 10 minutes" (Immediate scheduling)
+- AI must check reminder_at field and proactively notify user via chat UI
 
-## Containerization Requirements
+## Recurring Tasks & Real-time Features
 
-Phase 4 requires containerization of all services:
-- `backend/Dockerfile`: Multi-stage build for FastAPI service
-- `frontend/Dockerfile`: Multi-stage build for Next.js application
-- Proper health checks and startup scripts for containerized services
-- Environment-specific configurations for different deployment targets
+Phase 5 requires database schema updates:
+- Update `src/database.py` to support Neon DB connection strings
+- Run Alembic migrations to add: `recurring_interval`, `reminder_at`, and `last_notified` fields
+- Implement background worker within backend container to trigger reminders and generate recurring task instances
+- Ensure proper timezone handling for recurring tasks and reminders
 
-## Orchestration Requirements
+## AI System Prompt Enhancement
 
-Phase 4 requires Kubernetes manifests:
-- `k8s/backend-deployment.yaml`: Backend service deployment
-- `k8s/frontend-deployment.yaml`: Frontend service deployment
-- `k8s/services.yaml`: Service definitions for inter-service communication
-- `k8s/configmaps-secrets.yaml`: Configuration and secret management
-- `k8s/ingress.yaml`: Ingress configuration for external access
+Phase 5 requires AI system prompt updates:
+- Handle recurrence patterns: "Every Friday at 5 PM" (Recurrence parsing)
+- Handle immediate scheduling: "Remind me in 10 minutes" (Immediate scheduling)
+- Proactive notification via chat UI when reminder_at timestamp is reached
+- Maintain existing task management capabilities while adding new features
 
-## AIOps Integration
+## Phase 5 Specific Structure
 
-Phase 4 leverages AI-assisted operations:
-- Helm chart generation via kubectl-ai
-- Automated deployment through Kagent
-- AI-assisted troubleshooting and scaling recommendations
-- Intelligent resource allocation and optimization
+### Specs Directory
+- Create `specs/004-phase-5-deployment/` for all new functional specs
+
+### History Directory
+- Create `history/prompts/004-phase-5-deployment/` to log every step of the deployment and feature addition
+
+### Deployment Spec
+- Create `specs/004-phase-5-deployment/01-deployment-spec.md` for deployment requirements
 
 ## Implementation Workflow (Spec-Driven)
 
 ### 1. Specify
-Create `/specs/004-kubernetes-deployment/spec.md` for containerization and orchestration requirements.
+Create `/specs/004-phase-5-deployment/spec.md` for advanced features and deployment requirements.
 
 ### 2. Plan
-Generate `/specs/004-kubernetes-deployment/plan.md` for Kubernetes implementation roadmap.
+Generate `/specs/004-phase-5-deployment/plan.md` for advanced features and Kubernetes implementation roadmap.
 
 ### 3. Tasks
-Generate `/specs/004-kubernetes-deployment/tasks.md` for granular implementation checklist.
+Generate `/specs/004-phase-5-deployment/tasks.md` for granular implementation checklist.
 
 ## Repository Standards
 
@@ -117,11 +127,12 @@ Generate `/specs/004-kubernetes-deployment/tasks.md` for granular implementation
 - The repo must contain a `/specs` folder with all historical specification files
 - Each phase must have its own subdirectory in `/specs/`
 - All architectural decisions must be documented in ADRs
+- Deployment artifacts must be organized in `k8s/` and `charts/` directories
 
 ### Claude Instructions
 - A `CLAUDE.md` file must be present with specific instructions for Claude
-- Instructions must reflect Phase 4 requirements and constraints
-- AI tools must be properly configured for containerization and orchestration tasks
+- Instructions must reflect Phase 5 requirements and constraints
+- AI tools must be properly configured for containerization, orchestration, and advanced feature implementation tasks
 
 ## Operational Rules & "No Error" Policy
 
@@ -131,6 +142,7 @@ Generate `/specs/004-kubernetes-deployment/tasks.md` for granular implementation
 - **Validation**: Every feature must pass a `/sp.specify` check before implementation to ensure no logical gaps.
 - **Error-Free Code**: Claude must verify Dockerfiles, Kubernetes manifests, and Helm charts before delivery to prevent deployment failures.
 - **AI Integration**: All containerization and orchestration must leverage AIOps tools as mandated by Core Rules.
+- **Feature Completeness**: All advanced features (recurring tasks, reminders) must be fully implemented and tested before deployment.
 
 ### CLI Commands
 - `/sp.constitution`: Update project rules.
@@ -142,6 +154,6 @@ Generate `/specs/004-kubernetes-deployment/tasks.md` for granular implementation
 - `/sp.analyze`: Perform cross-artifact consistency analysis.
 
 ## Governance
-All development must strictly adhere to this constitution to ensure alignment with cloud-native requirements. Constitution supersedes all other practices. All code generation must follow spec-driven development principles using Claude Code and Spec-Kit Plus tools. All deployments must verify compliance with containerization and orchestration principles. AI-native features must leverage MCP tools and OpenAI Agents SDK as mandated by the Core Rules.
+All development must strictly adhere to this constitution to ensure alignment with cloud-native requirements and advanced feature implementation. Constitution supersedes all other practices. All code generation must follow spec-driven development principles using Claude Code and Spec-Kit Plus tools. All deployments must verify compliance with containerization, orchestration, and advanced feature requirements. AI-native features must leverage MCP tools and OpenAI Agents SDK as mandated by the Core Rules.
 
-**Version**: 2.0.0 | **Ratified**: 2026-01-06 | **Last Amended**: 2026-01-18
+**Version**: 2.1.0 | **Ratified**: 2026-01-06 | **Last Amended**: 2026-01-31

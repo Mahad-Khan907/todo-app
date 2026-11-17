@@ -28,7 +28,9 @@ class MCPServer:
             "uncomplete_task": self.uncomplete_task,
             "bulk_uncomplete_tasks": self.bulk_uncomplete_tasks,
             "bulk_delete_tasks": self.bulk_delete_tasks,
-            "bulk_update_tasks": self.bulk_update_tasks
+            "bulk_update_tasks": self.bulk_update_tasks,
+            "set_reminder": self.set_reminder,
+            "set_recurring_pattern": self.set_recurring_pattern
         }
 
     def _get_validated_user_uuid(self, user_id: str) -> UUID:
@@ -257,6 +259,106 @@ class MCPServer:
                     session.delete(task)
             session.commit()
             return {"success": True}
+
+
+    def set_reminder(self, task_id: Optional[str] = None, title: Optional[str] = None, reminder_time: str = None, user_id: str = None):
+        """
+        Set a reminder for a specific task
+
+        Args:
+            task_id: ID of the task to set a reminder for (optional)
+            title: Title of the task to set a reminder for (optional)
+            reminder_time: ISO format string for when to remind
+            user_id: User ID for authentication and data isolation
+        """
+        if not user_id:
+            raise ValueError("User ID is required")
+
+        if not reminder_time:
+            raise ValueError("Reminder time is required")
+
+        if not task_id and not title:
+            raise ValueError("Either task_id or title must be provided")
+
+        user_uuid = self._get_validated_user_uuid(user_id)
+
+        # Validate reminder_time format
+        try:
+            reminder_datetime = datetime.fromisoformat(reminder_time.replace('Z', '+00:00'))
+        except ValueError:
+            raise ValueError("Invalid datetime format. Use ISO format (e.g., 2023-12-01T10:30:00)")
+
+        with get_session_context() as session:
+            # Find the task
+            stmt = select(Task).where(
+                Task.id == int(task_id) if task_id else Task.title == title,
+                Task.user_id == user_uuid
+            )
+            task = session.exec(stmt).first()
+
+            if not task:
+                raise ValueError("Task not found")
+
+            # Set the reminder
+            task.reminder_at = reminder_datetime
+            session.add(task)
+            session.commit()
+
+            return {
+                "success": True,
+                "task_id": task.id,
+                "reminder_time": reminder_datetime.isoformat()
+            }
+
+
+    def set_recurring_pattern(self, task_id: Optional[str] = None, title: Optional[str] = None, pattern: str = None, user_id: str = None):
+        """
+        Set a recurring pattern for a specific task
+
+        Args:
+            task_id: ID of the task to set a recurring pattern for (optional)
+            title: Title of the task to set a recurring pattern for (optional)
+            pattern: The recurring pattern (daily, weekly, monthly, custom)
+            user_id: User ID for authentication and data isolation
+        """
+        if not user_id:
+            raise ValueError("User ID is required")
+
+        if not pattern:
+            raise ValueError("Pattern is required")
+
+        if not task_id and not title:
+            raise ValueError("Either task_id or title must be provided")
+
+        # Validate the pattern
+        valid_patterns = ["daily", "weekly", "monthly", "custom"]
+        if pattern not in valid_patterns:
+            raise ValueError(f"Invalid pattern: {pattern}. Must be one of {valid_patterns}")
+
+        user_uuid = self._get_validated_user_uuid(user_id)
+
+        with get_session_context() as session:
+            # Find the task
+            stmt = select(Task).where(
+                Task.id == int(task_id) if task_id else Task.title == title,
+                Task.user_id == user_uuid
+            )
+            task = session.exec(stmt).first()
+
+            if not task:
+                raise ValueError("Task not found")
+
+            # Set the recurring pattern
+            task.is_recurring = True
+            task.recurring_pattern = pattern
+            session.add(task)
+            session.commit()
+
+            return {
+                "success": True,
+                "task_id": task.id,
+                "pattern": pattern
+            }
 
 
 mcp_server = MCPServer()

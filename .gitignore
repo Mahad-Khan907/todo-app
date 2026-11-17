@@ -91,3 +91,7 @@ Thumbs.db
 krew-windows_amd64.exe
 minikube-windows-amd64.exe
 Project_Code_Summary.txt
+*.zip
+*.db
+*.sqlite3
+*.sqlite

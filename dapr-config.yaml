@@ -1,0 +1,20 @@
+apiVersion: dapr.io/v1alpha1
+kind: Configuration
+metadata:
+  name: dapr-config
+  namespace: default
+spec:
+  tracing:
+    samplingRate: "1"
+    zipkin:
+      endpointAddress: "http://zipkin.default.svc.cluster.local:9411/api/v2/spans"
+  mtls:
+    enabled: false
+    workloadCertTTL: 24h
+    controlPlaneTrustDomain: "pubsub"
+    sentryAddress: "dapr-sentry.dapr-system.svc.cluster.local:443"
+  features:
+    - name: proxy.grpc
+      enabled: true
+    - name: proxy.http
+      enabled: true

@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Check, X, Calendar, Tag, LayoutGrid, LayoutList, Search, Sparkles, Zap, Target, Clock, MessageSquare } from 'lucide-react'
+import { 
+  Plus, Check, X, Calendar, Tag, LayoutGrid, LayoutList, Search, 
+  Sparkles, Zap, Target, Clock, MessageSquare, PenLine, LogOut, 
+  Home, CheckCircle2, Bell, AlertCircle
+} from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
@@ -21,22 +25,16 @@ interface Task {
   due_date?: string
   tags?: string[]
   completed_at?: string
-}
-
-// Toned-down blue theme
-const blueConfig = {
-  gradientPrimary: 'from-blue-600 via-indigo-700 to-cyan-600',
-  gradientSecondary: 'from-cyan-600 to-blue-700',
-  glowPrimary: 'shadow-blue-500/30',
-  glowSecondary: 'shadow-cyan-500/30',
-  textGlow: 'text-cyan-300',
-  borderGlow: 'border-cyan-500/30',
+  is_recurring?: boolean
+  recurring_pattern?: 'daily' | 'weekly' | 'monthly' | 'custom'
+  reminder_at?: string
+  last_notified?: string
 }
 
 const priorityConfig = {
-  high: { gradient: 'from-red-500/70 to-orange-500/70', glow: 'shadow-red-500/20' },
-  medium: { gradient: 'from-yellow-400/70 to-amber-500/70', glow: 'shadow-yellow-400/20' },
-  low: { gradient: 'from-green-400/70 to-emerald-500/70', glow: 'shadow-green-400/20' },
+  high: { bg: 'bg-rose-500/15', text: 'text-rose-400', border: 'border-rose-500/30' },
+  medium: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30' },
+  low: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30' },
 }
 
 export default function Dashboard() {
@@ -48,12 +46,24 @@ export default function Dashboard() {
 }
 
 function DashboardContent() {
+  const formatToLocalDateTime = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
   const queryClient = useQueryClient();
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [priority, setPriority] = useState<Task['priority']>('medium')
   const [dueDate, setDueDate] = useState('')
   const [tags, setTags] = useState('')
+  const [isRecurring, setIsRecurring] = useState<boolean>(false)
+  const [recurringPattern, setRecurringPattern] = useState<'daily' | 'weekly' | 'monthly' | 'custom'>('weekly')
+  const [reminderAt, setReminderAt] = useState<string>('')
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list' | 'chat'>('grid')
@@ -63,15 +73,13 @@ function DashboardContent() {
   const { user, logout, loading } = useAuth();
   const router = useRouter();
 
-  // Redirect to login if not authenticated
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
     }
   }, [user, loading, router]);
 
-  // ✅ ERROR FIXED: Added trailing slash to /tasks/
-  const { data: tasks = [], isLoading } = useQuery<Task[]>({
+  const { data: tasks = [] } = useQuery<Task[]>({
     queryKey: ['tasks'],
     queryFn: async () => {
       const response = await api.get('/tasks/'); 
@@ -80,7 +88,6 @@ function DashboardContent() {
     enabled: !!user && !loading,
   });
 
-  // ✅ ERROR FIXED: Added trailing slash to /tasks/
   const createTaskMutation = useMutation({
     mutationFn: async (taskData: Omit<Task, 'id'>) => {
       const response = await api.post('/tasks/', taskData);
@@ -89,13 +96,19 @@ function DashboardContent() {
     onMutate: async (newTask) => {
       await queryClient.cancelQueries({ queryKey: ['tasks'] });
       const previousTasks = queryClient.getQueryData<Task[]>(['tasks']);
-      const optimisticTask = {
-        ...newTask,
+      const optimisticTask: Task = {
         id: Date.now(),
+        title: newTask.title,
+        description: newTask.description,
         completed: newTask.completed ?? false,
-        completed_at: newTask.completed_at ?? undefined,
-      } as Task;
-      queryClient.setQueryData(['tasks'], (old: Task[] = []) => [optimisticTask, ...old]);
+        priority: newTask.priority,
+        due_date: newTask.due_date,
+        tags: newTask.tags,
+        is_recurring: newTask.is_recurring,
+        recurring_pattern: newTask.recurring_pattern,
+        reminder_at: newTask.reminder_at,
+      };
+      queryClient.setQueryData<Task[]>(['tasks'], (old = []) => [optimisticTask, ...old]);
       return { previousTasks };
     },
     onError: (err, newTask, context) => {
@@ -103,31 +116,25 @@ function DashboardContent() {
         queryClient.setQueryData(['tasks'], context.previousTasks);
       }
     },
-    onSuccess: (newTask) => {
-      queryClient.setQueryData(['tasks'], (old: Task[] = []) =>
-        old.map(task => task.id === newTask.id ? newTask : task)
-      );
-    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
   });
 
-  // ✅ ERROR FIXED: Added trailing slash to /tasks/${id}/
   const updateTaskMutation = useMutation({
     mutationFn: async ({ id, taskData }: { id: number; taskData: Partial<Task> }) => {
-      const response = await api.patch(`/tasks/${id}/`, taskData);
+      const response = await api.patch(`/tasks/${id}`, taskData);
       return response.data;
     },
     onMutate: async ({ id, taskData }) => {
       await queryClient.cancelQueries({ queryKey: ['tasks'] });
       const previousTasks = queryClient.getQueryData<Task[]>(['tasks']);
-      queryClient.setQueryData(['tasks'], (old: Task[] = []) =>
-        old.map(task => task.id === id ? { ...task, ...taskData } : task)
+      queryClient.setQueryData<Task[]>(['tasks'], (old = []) =>
+        old.map(task => (task.id === id ? { ...task, ...taskData } : task))
       );
       return { previousTasks };
     },
-    onError: (err, { id, taskData }, context) => {
+    onError: (err, variables, context) => {
       if (context?.previousTasks) {
         queryClient.setQueryData(['tasks'], context.previousTasks);
       }
@@ -137,16 +144,15 @@ function DashboardContent() {
     },
   });
 
-  // ✅ ERROR FIXED: Added trailing slash to /tasks/${id}/
   const deleteTaskMutation = useMutation({
     mutationFn: async (id: number) => {
-      const response = await api.delete(`/tasks/${id}/`);
+      const response = await api.delete(`/tasks/${id}`);
       return id;
     },
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: ['tasks'] });
       const previousTasks = queryClient.getQueryData<Task[]>(['tasks']);
-      queryClient.setQueryData(['tasks'], (old: Task[] = []) =>
+      queryClient.setQueryData<Task[]>(['tasks'], (old = []) =>
         old.filter(task => task.id !== id)
       );
       return { previousTasks };
@@ -161,7 +167,6 @@ function DashboardContent() {
     },
   });
 
-  // memoized stats and filtered tasks logic remains same...
   const stats = useMemo(() => {
     const total = tasks.length
     const today = new Date();
@@ -210,8 +215,11 @@ function DashboardContent() {
       setTitle(task.title)
       setDescription(task.description || '')
       setPriority(task.priority)
-      setDueDate(task.due_date || '')
+      setDueDate(task.due_date ? formatToLocalDateTime(new Date(task.due_date)) : '')
       setTags(task.tags?.join(', ') || '')
+      setIsRecurring(task.is_recurring || false)
+      setRecurringPattern(task.recurring_pattern || 'weekly')
+      setReminderAt(task.reminder_at ? formatToLocalDateTime(new Date(task.reminder_at)) : '')
     } else {
       setEditingTask(null)
       setTitle('')
@@ -219,26 +227,33 @@ function DashboardContent() {
       setPriority('medium')
       setDueDate('')
       setTags('')
+      setIsRecurring(false)
+      setRecurringPattern('weekly')
+      setReminderAt('')
     }
     setShowModal(true)
   }
 
   const saveTask = async () => {
     if (!title.trim()) return;
-    const taskData = {
-      title: title.trim(),
-      description: description.trim() || undefined,
+
+    const parsedTags = tags
+      ? tags.split(',').map(t => t.trim()).filter(Boolean)
+      : [];
+
+    const taskData: any = {
+      title,
+      description: description || undefined,
       priority,
-      due_date: dueDate || undefined,
-      tags: tags.split(',').map(t => t.trim()).filter(Boolean),
-      completed: false,
-    };
+      due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+      tags: parsedTags,
+      is_recurring: isRecurring,
+      recurring_pattern: isRecurring ? recurringPattern : undefined,
+      reminder_at: reminderAt ? new Date(reminderAt).toISOString() : undefined,
+    }
 
     if (editingTask) {
-      updateTaskMutation.mutate({
-        id: editingTask.id,
-        taskData
-      });
+      updateTaskMutation.mutate({ id: editingTask.id, taskData });
     } else {
       createTaskMutation.mutate(taskData);
     }
@@ -248,7 +263,10 @@ function DashboardContent() {
   const toggleComplete = async (id: number) => {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
-    const updatedTaskData = { completed: !task.completed, completed_at: !task.completed ? new Date().toISOString() : undefined };
+    const updatedTaskData = { 
+      completed: !task.completed, 
+      completed_at: !task.completed ? new Date().toISOString() : undefined 
+    };
     updateTaskMutation.mutate({ id, taskData: updatedTaskData });
   }
 
@@ -261,270 +279,351 @@ function DashboardContent() {
     router.push('/login');
   };
 
-  if (loading) {
+  if (loading || !user) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-400 bg-clip-text text-transparent animate-pulse">
-          Loading...
-        </p>
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
       </div>
-    )
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-400 bg-clip-text text-transparent animate-pulse">
-          Redirecting...
-        </p>
-      </div>
-    )
+    );
   }
 
   return (
-    <>
-      <div className="min-h-screen bg-black text-white relative overflow-hidden">
-        <div className="fixed inset-0 bg-gradient-to-br from-blue-900/20 via-black to-indigo-900/20" />
-        <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,rgba(30,58,138,0.15),transparent_70%)]" />
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200">
+      {/* Decorative ambient background */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[400px] bg-gradient-to-b from-indigo-600/15 via-purple-600/10 to-transparent blur-3xl pointer-events-none -z-10" />
 
-        <div className="fixed inset-0 pointer-events-none opacity-40">
-          <div className="absolute top-20 left-0 w-96 h-96 rounded-full blur-3xl bg-blue-500/20" />
-          <div className="absolute bottom-40 right-0 w-80 h-80 rounded-full blur-3xl bg-indigo-600/20" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full blur-3xl bg-cyan-600/10" />
+      {/* Top Navbar */}
+      <header className="sticky top-0 z-40 backdrop-blur-xl bg-slate-950/75 border-b border-slate-800/80">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-18 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="flex items-center gap-2.5 group">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-400 flex items-center justify-center shadow-md shadow-indigo-500/20 group-hover:scale-105 transition-transform">
+                <CheckCircle2 className="w-5 h-5 text-white" />
+              </div>
+              <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+                TaskFlow AI
+              </span>
+            </Link>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-xs text-slate-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="font-medium">{user.email}</span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Log out</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
+        {/* Header & Quick Action */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-white">Workspace Overview</h1>
+            <p className="text-sm text-slate-400 mt-1">Organize priorities, manage recurring schedules, and collaborate with AI.</p>
+          </div>
+
+          <button
+            onClick={() => openModal()}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Create Task</span>
+          </button>
         </div>
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4">
-            <button
-              onClick={() => { setTimeout(() => { window.location.replace('/') }, 0) }}
-              className="font-bold text-xl text-white hover:text-cyan-300 transition"
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[
+            { icon: Sparkles, label: "Completion Rate", value: `${stats.score}%`, color: "text-indigo-400", bg: "bg-indigo-500/10" },
+            { icon: Zap, label: "Completed Today", value: stats.todayCompleted, color: "text-cyan-400", bg: "bg-cyan-500/10" },
+            { icon: Target, label: "Active Tasks", value: tasks.length - tasks.filter(t => t.completed).length, color: "text-purple-400", bg: "bg-purple-500/10" },
+            { icon: Clock, label: "Due Next 3 Days", value: stats.dueSoon, color: "text-amber-400", bg: "bg-amber-500/10" },
+          ].map((stat, i) => (
+            <div
+              key={i}
+              className="p-5 rounded-2xl bg-slate-900/70 border border-slate-800/80 backdrop-blur-sm"
             >
-              Home
-            </button>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-slate-400">{stat.label}</span>
+                <div className={`p-2 rounded-xl ${stat.bg} ${stat.color}`}>
+                  <stat.icon className="w-4 h-4" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-white tracking-tight">{stat.value}</p>
+            </div>
+          ))}
+        </div>
 
-            <div className="flex sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
-              <span className="text-white/90 mt-[10px] md:mt-0 text-sm sm:text-base truncate max-w-full sm:max-w-none">
-                Hi, {user.email}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-700 to-cyan-600 font-medium text-white shadow-lg hover:shadow-blue-500/50 transition whitespace-nowrap"
+        {/* Search, Filter & View Controls */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 mb-6">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search by title, description, or tags..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* View Switcher */}
+            <div className="flex items-center p-1 rounded-xl bg-slate-900 border border-slate-800">
+              <button 
+                onClick={() => setViewMode('grid')} 
+                className={`p-1.5 rounded-lg text-xs font-medium transition ${viewMode === 'grid' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                title="Grid View"
               >
-                Logout
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setViewMode('list')} 
+                className={`p-1.5 rounded-lg text-xs font-medium transition ${viewMode === 'list' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                title="List View"
+              >
+                <LayoutList className="w-4 h-4" />
+              </button>
+              <button 
+                onClick={() => setViewMode('chat')} 
+                className={`p-1.5 rounded-lg text-xs font-medium transition ${viewMode === 'chat' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                title="AI Copilot View"
+              >
+                <MessageSquare className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Filter Pills */}
+            {viewMode !== 'chat' && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(['all', 'pending', 'completed', 'high', 'medium', 'low'] as const).map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setFilterType(f as any)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium capitalize transition ${
+                      filterType === f
+                        ? 'bg-slate-800 text-white border border-slate-700 shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200 bg-slate-900/50 hover:bg-slate-900 border border-slate-800/60'
+                    }`}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
+        </div>
 
-          <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.6 }}>
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-100 text-center mb-3 drop-shadow-[0_4px_12px_rgba(255,255,255,0.35)]">
-              Dashboard
-            </h1>
-            <p className="text-center text-white/60">Manage your tasks with deep focus</p>
-          </motion.div>
-
-          <div className="flex flex-col sm:flex-row gap-4 max-w-4xl mx-auto mb-10 mt-10">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={20} />
-              <input
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search tasks..."
-                className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 backdrop-blur-md border border-white/10 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition"
-              />
-            </div>
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => openModal()}
-              className={`px-8 py-3 rounded-xl bg-gradient-to-r ${blueConfig.gradientPrimary} font-semibold text-white flex items-center justify-center gap-2 shadow-lg ${blueConfig.glowPrimary}`}
-            >
-              <Plus size={20} />
-              Add Task
-            </motion.button>
+        {/* Views Container */}
+        {viewMode === 'chat' ? (
+          <div className="h-[650px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-900/60 backdrop-blur-md shadow-2xl">
+            <ChatInterface onTaskChange={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} />
           </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
-            {[ 
-              { icon: Sparkles, label: "Productivity", value: `${stats.score}%`, color: "from-blue-500 to-cyan-500" },
-              { icon: Zap, label: "Today", value: stats.todayCompleted, color: "from-indigo-400 to-blue-500" },
-              { icon: Target, label: "Active", value: tasks.length - tasks.filter(t=>t.completed).length, color: "from-cyan-400 to-blue-600" },
-              { icon: Clock, label: "Due Soon", value: stats.dueSoon, color: "from-blue-400 to-indigo-500" },
-            ].map((stat, i) => (
-              <motion.div
-                key={i}
-                initial={{ y: 30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: i * 0.1, duration: 0.5 }}
-                className="p-5 rounded-2xl bg-white/5 backdrop-blur-md border border-white/10 hover:border-blue-500/30 transition"
-              >
-                <div className={`h-1 w-full rounded-full bg-gradient-to-r ${stat.color} opacity-40 mb-4`} />
-                <stat.icon className="w-8 h-8 mb-3 text-white/70" />
-                <p className="text-3xl font-bold text-cyan-300">{stat.value}</p>
-                <p className="text-white/50 text-sm mt-1">{stat.label}</p>
-              </motion.div>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-            <div className="flex bg-white/5 backdrop-blur-md rounded-xl p-1 border border-white/10">
-              <button onClick={() => setViewMode('grid')} className={`p-2.5 rounded-lg transition ${viewMode === 'grid' ? 'bg-white text-black' : 'text-white/60'}`}>
-                <LayoutGrid size={18} />
-              </button>
-              <button onClick={() => setViewMode('list')} className={`p-2.5 rounded-lg transition ${viewMode === 'list' ? 'bg-white text-black' : 'text-white/60'}`}>
-                <LayoutList size={18} />
-              </button>
-              <button onClick={() => setViewMode('chat')} className={`p-2.5 rounded-lg transition ${viewMode === 'chat' ? 'bg-white text-black' : 'text-white/60'}`}>
-                <MessageSquare size={18} />
-              </button>
-            </div>
-            {viewMode !== 'chat' && ['all', 'pending', 'completed', 'high', 'medium', 'low', 'date'].map(f => (
-              <button
-                key={f}
-                onClick={() => setFilterType(f as any)}
-                className={`px-4 py-2 rounded-lg text-sm capitalize transition ${
-                  filterType === f
-                    ? `bg-gradient-to-r ${blueConfig.gradientPrimary} text-white font-medium shadow-md`
-                    : 'bg-white/5 text-white/60 hover:text-white'
-                }`}
-              >
-                {f === 'all' ? 'All Tasks' : f === 'date' ? 'By Date' : f}
-              </button>
-            ))}
-          </div>
-
-          {viewMode === 'chat' ? (
-            <div className="h-[600px]"><ChatInterface onTaskChange={() => queryClient.invalidateQueries({ queryKey: ['tasks'] })} /></div>
-          ) : (
-            <motion.div layout className={viewMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6' : 'space-y-6 max-w-5xl mx-auto'}>
-              <AnimatePresence>
-                {filteredTasks.length === 0 ? (
-                  <p className="col-span-full text-center text-white/40 py-12 text-lg">
-                    No tasks found. Create one to get started!
-                  </p>
-                ) : (
-                  filteredTasks.map((task) => (
-                    <motion.div
-                      key={task.id}
-                      layout
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      whileHover={{ y: -4 }}
-                      transition={{ duration: 0.3 }}
-                      className="relative group"
-                    >
-                    <div className={`absolute -inset-1.5 bg-gradient-to-r ${priorityConfig[task.priority].gradient} rounded-2xl blur-lg opacity-20 group-hover:opacity-40 transition duration-500`} />
-                      <div className="relative bg-black/60 backdrop-blur-xl rounded-2xl border border-white/20 p-6 hover:border-blue-500/40 transition">
-                        <div className="flex items-start justify-between mb-4">
-                          <motion.button
-                            whileTap={{ scale: 0.9 }}
+        ) : (
+          <div>
+            {filteredTasks.length === 0 ? (
+              <div className="text-center py-20 bg-slate-900/30 rounded-2xl border border-slate-800/80">
+                <CheckCircle2 className="w-12 h-12 text-slate-600 mx-auto mb-3" />
+                <h3 className="text-lg font-semibold text-slate-300">No tasks found</h3>
+                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                  {searchQuery ? "No matches for your current search term." : "Your workspace is empty. Create a task or use the AI Copilot to get started!"}
+                </p>
+                <button
+                  onClick={() => openModal()}
+                  className="mt-5 px-4 py-2 text-xs font-semibold text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 rounded-xl transition"
+                >
+                  Add Your First Task
+                </button>
+              </div>
+            ) : (
+              <div className={viewMode === 'grid' ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" : "space-y-3"}>
+                <AnimatePresence>
+                  {filteredTasks.map(task => {
+                    const priorityStyle = priorityConfig[task.priority] || priorityConfig.medium;
+                    return (
+                      <motion.div
+                        key={task.id}
+                        layout
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                        className={`group relative p-5 rounded-2xl bg-slate-900/70 border border-slate-800 hover:border-slate-700 transition-all shadow-lg ${
+                          task.completed ? 'opacity-65' : ''
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <button
                             onClick={() => toggleComplete(task.id)}
-                            className={`w-9 h-9 rounded-full border-2 flex items-center justify-center transition ${
-                              task.completed ? `bg-gradient-to-r ${blueConfig.gradientPrimary} border-transparent shadow-md` : 'border-white/40'
+                            className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-colors ${
+                              task.completed
+                                ? 'bg-indigo-600 border-indigo-600 text-white'
+                                : 'border-slate-700 hover:border-indigo-400 bg-slate-950/50'
                             }`}
                           >
-                            {task.completed && <Check size={18} className="text-white" />}
-                          </motion.button>
-                          <div className="flex gap-3">
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
+                            {task.completed && <Check className="w-3.5 h-3.5" />}
+                          </button>
+
+                          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => openModal(task)}
+                              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+                              title="Edit"
+                            >
+                              <PenLine className="w-3.5 h-3.5" />
+                            </button>
+                            <button
                               onClick={() => {
-                                if (confirm("Are you sure you want to delete this task?")) {
+                                if (confirm("Delete this task?")) {
                                   deleteTask(task.id);
                                 }
                               }}
+                              className="p-1.5 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition"
+                              title="Delete"
                             >
-                              <X size={20} className="text-red-400" />
-                            </motion.button>
-                            <motion.button whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }} onClick={() => openModal(task)}>
-                              <Plus size={20} className="text-cyan-300" />
-                            </motion.button>
+                              <X className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
-                        <h3 className={`text-xl font-semibold mb-3 ${task.completed ? 'line-through opacity-60' : ''}`}>
+
+                        <h3 className={`text-base font-semibold text-white mb-1.5 ${task.completed ? 'line-through text-slate-400' : ''}`}>
                           {task.title}
                         </h3>
-                        {task.description && <p className="text-white/60 text-sm mb-4 break-words">{task.description}</p>}
+
+                        {task.description && (
+                          <p className="text-xs text-slate-400 leading-relaxed line-clamp-3 mb-3">
+                            {task.description}
+                          </p>
+                        )}
+
                         {task.tags && task.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mb-5">
-                            {task.tags.map((tag, i) => (
-                              <span key={i} className="px-3 py-1 rounded-full text-xs bg-white/10 border border-blue-500/20 text-cyan-300">
-                                {tag}
+                          <div className="flex flex-wrap gap-1.5 mb-3">
+                            {task.tags.map((tag, idx) => (
+                              <span key={idx} className="px-2 py-0.5 rounded-md text-[10px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                                #{tag}
                               </span>
                             ))}
                           </div>
                         )}
-                        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                          <span className={`font-bold uppercase bg-gradient-to-r ${priorityConfig[task.priority].gradient} bg-clip-text text-transparent`}>
+
+                        <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+                          <span className={`px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider text-[10px] ${priorityStyle.bg} ${priorityStyle.text} border ${priorityStyle.border}`}>
                             {task.priority}
                           </span>
-                          {task.due_date && (
-                            <span className="flex items-center gap-1 text-white/50">
-                              <Calendar size={16} />
-                              {new Date(task.due_date).toLocaleDateString()}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))
-                )}
-              </AnimatePresence>
-            </motion.div>
-          )}
-        </div>
 
-        <AnimatePresence>
-          {showModal && (
+                          <div className="flex items-center gap-3">
+                            {task.due_date && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="w-3 h-3 text-slate-500" />
+                                {new Date(task.due_date).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {(task.is_recurring || task.reminder_at) && (
+                          <div className="mt-2.5 pt-2 border-t border-slate-800/50 flex flex-wrap gap-2 text-[10px] text-slate-400">
+                            {task.is_recurring && (
+                              <span className="inline-flex items-center gap-1 text-cyan-300">
+                                <Zap className="w-3 h-3 text-cyan-400" />
+                                <span>Recurring: {task.recurring_pattern}</span>
+                              </span>
+                            )}
+                            {task.reminder_at && (
+                              <span className="inline-flex items-center gap-1 text-indigo-300">
+                                <Bell className="w-3 h-3 text-indigo-400" />
+                                <span>Reminder: {new Date(task.reminder_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Task Creation & Edit Modal */}
+      <AnimatePresence>
+        {showModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md"
+            onClick={() => setShowModal(false)}
+          >
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
-              onClick={() => setShowModal(false)}
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+              className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl overflow-y-auto max-h-[90vh]"
             >
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                onClick={e => e.stopPropagation()}
-                className="relative w-full max-w-md sm:max-w-lg bg-black/80 backdrop-blur-2xl rounded-2xl border border-blue-500/30 p-6 sm:p-8 shadow-2xl"
-              >
-                <h2 className="text-2xl sm:text-3xl font-bold mb-6 text-center bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
-                  {editingTask ? 'Edit Task' : 'New Task'}
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-xl font-bold text-white">
+                  {editingTask ? 'Edit Task' : 'Create New Task'}
                 </h2>
-                <div className="space-y-5">
+                <button 
+                  onClick={() => setShowModal(false)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Task Title *
+                  </label>
                   <input
-                    placeholder="Title *"
                     value={title}
                     onChange={e => setTitle(e.target.value)}
-                    className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition"
+                    placeholder="e.g., Deploy production updates"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Description
+                  </label>
                   <textarea
-                    placeholder="Description (optional)"
                     value={description}
                     onChange={e => setDescription(e.target.value)}
-                    rows={4}
-                    className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/20 resize-none transition"
+                    placeholder="Details or steps required..."
+                    rows={3}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-sm text-white focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition resize-none"
                   />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={e => setDueDate(e.target.value)}
-                      className="px-5 py-4 rounded-xl bg-white/10 border border-white/20 focus:border-cyan-500 focus:outline-none transition"
-                    />
-                    <div className="grid grid-cols-3 gap-3">
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Priority
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
                       {(['low', 'medium', 'high'] as const).map(p => (
                         <button
                           key={p}
+                          type="button"
                           onClick={() => setPriority(p)}
-                          className={`py-3 rounded-xl font-semibold capitalize transition ${
+                          className={`py-2 rounded-xl text-xs font-semibold capitalize border transition ${
                             priority === p
-                              ? `bg-gradient-to-r ${priorityConfig[p].gradient} text-white shadow-md`
-                              : 'bg-white/10 text-white/70 hover:text-white'
+                              ? 'bg-indigo-600 border-indigo-500 text-white shadow-md'
+                              : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-white'
                           }`}
                         >
                           {p}
@@ -532,33 +631,99 @@ function DashboardContent() {
                       ))}
                     </div>
                   </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Due Date
+                    </label>
+                    <input
+                      type="date"
+                      value={dueDate ? dueDate.split('T')[0] : ''}
+                      onChange={e => setDueDate(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500 transition [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Tags (Comma separated)
+                  </label>
                   <input
-                    placeholder="Tags (comma separated)"
                     value={tags}
                     onChange={e => setTags(e.target.value)}
-                    className="w-full px-5 py-4 rounded-xl bg-white/10 border border-white/20 focus:border-cyan-500 focus:outline-none focus:ring-4 focus:ring-cyan-500/20 transition"
+                    placeholder="work, urgent, frontend"
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500 transition"
                   />
                 </div>
-                <div className="flex flex-col sm:flex-row justify-end gap-4 mt-8">
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="px-8 py-3 cursor-pointer rounded-xl bg-white/10 hover:bg-white/20 transition"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={saveTask}
-                    className={`px-10 py-3 rounded-xl bg-gradient-to-r ${blueConfig.gradientPrimary} text-white font-bold cursor-pointer shadow-lg`}
-                  >
-                    {editingTask ? 'Save Changes' : 'Create Task'}
-                  </button>
+
+                {/* Recurring Task toggle */}
+                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-200">Recurring Schedule</p>
+                    <p className="text-[11px] text-slate-500">Auto-create task when cycle completes</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isRecurring}
+                    onChange={e => setIsRecurring(e.target.checked)}
+                    className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                  />
                 </div>
-              </motion.div>
+
+                {isRecurring && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                      Recurrence Frequency
+                    </label>
+                    <select
+                      value={recurringPattern}
+                      onChange={e => setRecurringPattern(e.target.value as any)}
+                      className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500"
+                    >
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Reminder DateTime Picker */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                    Email Reminder Date & Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={reminderAt}
+                    onChange={e => setReminderAt(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white focus:outline-none focus:border-indigo-500 transition [color-scheme:dark]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-800 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveTask}
+                  className="px-5 py-2 rounded-xl text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-cyan-500 hover:opacity-95 shadow-lg shadow-indigo-500/25 transition"
+                >
+                  {editingTask ? 'Save Changes' : 'Create Task'}
+                </button>
+              </div>
             </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <FloatingChatButton user={user} />
-    </>
-  )
+    </div>
+  );
 }

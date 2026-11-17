@@ -2,7 +2,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.database import create_db_and_tables
-from src.routers import auth, tasks, chat
+from src.routers import auth, tasks, chat, reminders
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -20,10 +20,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include Auth, Task, and Chat routers
+# Include Auth, Task, Chat, and Reminders routers
 app.include_router(auth.router)
 app.include_router(tasks.router)
 app.include_router(chat.router)
+app.include_router(reminders.router)
 
 @app.on_event("startup")
 async def on_startup():
@@ -47,6 +48,14 @@ async def on_startup():
     thread = threading.Thread(target=init_db, daemon=True)
     thread.start()
 
+    # Start the task scheduler for recurring tasks and reminders
+    try:
+        from src.scheduler import task_scheduler
+        task_scheduler.start()
+        logger.info("Task scheduler started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start task scheduler: {e}")
+
 @app.get("/")
 def read_root():
     logger.info("Root endpoint accessed.")
@@ -62,6 +71,21 @@ def health_check():
     Health check endpoint.
     """
     return {"status": "healthy", "service": "Todo Web App API"}
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    logger.info("Application shutdown event triggered.")
+    """
+    Shutdown event handler.
+    Stops the task scheduler.
+    """
+    try:
+        from src.scheduler import task_scheduler
+        task_scheduler.shutdown()
+        logger.info("Task scheduler stopped successfully")
+    except Exception as e:
+        logger.error(f"Failed to stop task scheduler: {e}")
 
 
 if __name__ == "__main__":

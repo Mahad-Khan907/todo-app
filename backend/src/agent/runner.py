@@ -14,6 +14,7 @@ from sqlmodel import select
 import os
 from uuid import UUID
 import time
+from datetime import datetime
 
 
 class AgentRunner:
@@ -22,8 +23,15 @@ class AgentRunner:
     """
 
     def __init__(self):
-        # Initialize OpenAI client
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        # Support both OpenRouter and standard OpenAI
+        api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
+        base_url = os.getenv("OPENROUTER_BASE_URL") or os.getenv("OPENAI_BASE_URL")
+        self.model = os.getenv("OPENROUTER_MODEL") or os.getenv("OPENAI_MODEL") or "particle-ai/particle-1:free"
+
+        if base_url:
+            self.client = OpenAI(api_key=api_key, base_url=base_url)
+        else:
+            self.client = OpenAI(api_key=api_key)
 
         # Get MCP tools
         self.tools = list(mcp_server.tools.values())
@@ -41,7 +49,9 @@ class AgentRunner:
             "uncomplete_task": mcp_server.uncomplete_task,
             "bulk_uncomplete_tasks": mcp_server.bulk_uncomplete_tasks,
             "bulk_delete_tasks": mcp_server.bulk_delete_tasks,
-            "bulk_update_tasks": mcp_server.bulk_update_tasks
+            "bulk_update_tasks": mcp_server.bulk_update_tasks,
+            "set_reminder": mcp_server.set_reminder,
+            "set_recurring_pattern": mcp_server.set_recurring_pattern
         }
 
     def get_conversation_context(
@@ -136,7 +146,9 @@ class AgentRunner:
                 "You can use the following tools to interact with the task system: "
                 "add_task, list_tasks, complete_task, update_task, delete_task, "
                 "mark_all_tasks, delete_all_tasks, update_multiple_tasks, "
-                "uncomplete_task, bulk_uncomplete_tasks, bulk_delete_tasks. "
+                "uncomplete_task, bulk_uncomplete_tasks, bulk_delete_tasks, "
+                "set_reminder, set_recurring_pattern. "
+                "Additionally, you can handle recurring tasks and reminders using special language. "
                 "When a user asks to modify a task (e.g., complete, update, delete), "
                 "first try to identify the task by its title. If you find a matching task, "
                 "use its title to call the appropriate tool. If you cannot find a task "
@@ -157,6 +169,8 @@ class AgentRunner:
                 "3. Priority (high, medium, or low) - look for 'priority', 'prio', 'level' "
                 "4. Due date (optional, in YYYY-MM-DD format) - look for 'date', 'due', 'deadline' "
                 "5. Tags (optional, comma-separated) - look for 'tags', 'labels', 'categories' "
+                "6. Recurring pattern (optional) - look for phrases like 'every day', 'daily', 'weekly', 'monthly', 'every Monday', 'every first of the month' "
+                "7. Reminder time (optional) - look for phrases like 'remind me', 'remind me at', 'notify me', 'in 10 minutes', 'at 5pm', 'tomorrow at 9am' "
                 "When updating a task, distinguish between identifying the task and changing its title: "
                 "If a user says 'update task X to Y with description Z', interpret this as updating the task with title X, "
                 "changing its title to Y, and setting description to Z. "
@@ -165,13 +179,58 @@ class AgentRunner:
                 "should update only those properties while keeping the title as 'prince'. "
                 "If the user provides partial information across multiple messages, remember the context and combine the information. "
                 "If date is provided in a different format like '8/jan/2026', convert it to YYYY-MM-DD format (e.g., '2026-01-08'). "
+                "For recurring tasks, recognize natural language patterns such as: "
+                "'Set a recurring task to...', 'Every Monday...', 'Weekly team meeting...', 'Monthly review...', "
+                "'Repeat daily...', 'Remind me every Friday...', etc. "
+                "For reminder scheduling, recognize patterns like: "
+                "'Remind me to...', 'Notify me...', 'Set a reminder for...', 'Remind me in 30 minutes...', "
+                "'Alert me at 6pm...', 'Don\\'t forget to... at 10am', etc. "
                 "Be helpful and concise in your responses. "
                 "Include context-aware emojis in every response: "
-                "✅ for task completion, 🚀 for new tasks, 🕒 for reminders, "
+                "✅ for task completion, 🚀 for new tasks, 🔄 for recurring tasks, 🕒 for reminders, "
                 "📝 for updates, ❌ for deletions, 💬 for general chat, "
-                "🔍 for searches/lists, ⏳ for pending actions."
+                "🔍 for searches/lists, ⏳ for pending actions, ⏰ for scheduled tasks."
             )
         })
+
+        # Check for upcoming reminders for the user
+        try:
+            from ..utils.reminders import get_pending_reminders
+            from ..database import get_session_context
+            from ..models import Task
+
+            with get_session_context() as session:
+                pending_reminders = get_pending_reminders(user_id, session)
+
+                if pending_reminders:
+                    reminder_info = "UPCOMING REMINDERS:\n"
+                    for reminder_task in pending_reminders:
+                        if reminder_task.reminder_at:
+                            from datetime import timezone
+                            # Handle timezone-aware datetime comparison
+                            current_time = datetime.now(timezone.utc)
+                            reminder_time = reminder_task.reminder_at
+
+                            # Ensure both are timezone-aware
+                            if reminder_time.tzinfo is None:
+                                reminder_time = reminder_time.replace(tzinfo=timezone.utc)
+
+                            time_until = (reminder_time - current_time).total_seconds()
+                            minutes_until = int(time_until / 60)
+
+                            if minutes_until > 0:
+                                reminder_info += f"- '{reminder_task.title}' in {minutes_until} minute(s)\n"
+                            else:
+                                reminder_info += f"- '{reminder_task.title}' is due now!\n"
+
+                    # Add reminder information to the context
+                    messages.append({
+                        "role": "system",
+                        "content": reminder_info
+                    })
+        except Exception as e:
+            # If there's an error checking for reminders, continue without them
+            pass
 
         # Add conversation context if we have an existing conversation
         if conversation_id:
@@ -529,12 +588,46 @@ class AgentRunner:
                                     "required": ["updates", "user_id"]
                                 }
                             }
+                        },
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "set_reminder",
+                                "description": "Set a reminder for a task, identified by its ID or title",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "task_id": {"type": "string", "description": "ID of the task to set a reminder for (optional)"},
+                                        "title": {"type": "string", "description": "Title of the task to set a reminder for (optional)"},
+                                        "reminder_time": {"type": "string", "description": "ISO format string for when to remind (e.g., 2023-12-01T10:30:00)"},
+                                        "user_id": {"type": "string", "description": "User ID"}
+                                    },
+                                    "required": ["user_id", "reminder_time"]
+                                }
+                            }
+                        },
+                        {
+                            "type": "function",
+                            "function": {
+                                "name": "set_recurring_pattern",
+                                "description": "Set a recurring pattern for a task, identified by its ID or title",
+                                "parameters": {
+                                    "type": "object",
+                                    "properties": {
+                                        "task_id": {"type": "string", "description": "ID of the task to set a recurring pattern for (optional)"},
+                                        "title": {"type": "string", "description": "Title of the task to set a recurring pattern for (optional)"},
+                                        "pattern": {"type": "string", "description": "The recurring pattern: daily, weekly, monthly, or custom", "enum": ["daily", "weekly", "monthly", "custom"]},
+                                        "user_id": {"type": "string", "description": "User ID"}
+                                    },
+                                    "required": ["user_id", "pattern"]
+                                }
+                            }
                         }
                     ]
 
                 # Make the API call
                 response = self.client.chat.completions.create(
-                    model="gpt-3.5-turbo",  # Could be configurable
+                    model=getattr(self, "model", "particle-ai/particle-1:free"),
                     messages=messages,
                     tools=tools if tools else None,  # Don't pass tools if it's an empty list for final calls
                     tool_choice="auto" if tools else None

@@ -1,0 +1,56 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redpanda
+  labels:
+    app: redpanda
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redpanda
+  template:
+    metadata:
+      labels:
+        app: redpanda
+    spec:
+      containers:
+      - name: kafka
+        image: confluentinc/cp-kafka:latest
+        ports:
+        - containerPort: 9092
+          name: kafka-api
+        env:
+        - name: KAFKA_BROKER_ID
+          value: "1"
+        - name: KAFKA_ZOOKEEPER_CONNECT
+          value: "localhost:2181"  # For demo purposes; in production use a proper zookeeper
+        - name: KAFKA_ADVERTISED_LISTENERS
+          value: "PLAINTEXT:localhost:9092"
+        - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+          value: "1"
+        volumeMounts:
+        - name: datadir
+          mountPath: /var/lib/kafka/data
+      volumes:
+      - name: datadir
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+spec:
+  selector:
+    app: redpanda
+  ports:
+    - name: kafka-api
+      port: 29092
+      targetPort: 9092
+    - name: schema-registry
+      port: 8081
+      targetPort: 8081
+    - name: proxy-api
+      port: 8082
+      targetPort: 8082
+  type: ClusterIP

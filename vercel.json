@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/py/:path*",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/api/auth/:path*",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/auth/:path*",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/tasks/:path*",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/chat/:path*",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/reminders/:path*",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/health",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/docs",
+      "destination": "/api/index.py"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "/api/index.py"
+    }
+  ]
+}

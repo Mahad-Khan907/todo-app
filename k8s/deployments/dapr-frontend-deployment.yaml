@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dapr-frontend-deployment
+  labels:
+    app: dapr-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dapr-frontend
+  template:
+    metadata:
+      labels:
+        app: dapr-frontend
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "frontend-service"
+        dapr.io/app-port: "3000"
+        dapr.io/config: "dapr-config"
+        dapr.io/components: "app-secrets"
+    spec:
+      containers:
+      - name: frontend
+        image: todo-frontend:v1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NEXT_PUBLIC_BACKEND_URL
+          value: "http://backend-service:8000"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+spec:
+  selector:
+    app: dapr-frontend
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
+  type: LoadBalancer

@@ -2,9 +2,19 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useConversation } from "@/contexts/ConversationContext";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Bot, User, Plus, MessageSquare, History, Sparkles, Loader2, X, Menu, Trash2, ExternalLink } from "lucide-react";
+import { 
+  Send, 
+  Bot, 
+  User, 
+  Plus, 
+  History, 
+  Sparkles, 
+  Loader2, 
+  X, 
+  Trash2, 
+  ChevronLeft
+} from "lucide-react";
 import api from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -12,7 +22,7 @@ export default function ChatInterface({ onTaskChange, onClose }: { onTaskChange?
   const [inputValue, setInputValue] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isMessagesLoading, setIsMessagesLoading] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const { user } = useAuth();
 
   const {
@@ -67,8 +77,8 @@ export default function ChatInterface({ onTaskChange, onClose }: { onTaskChange?
         }
       }
     } catch (e) {
-        setConversations([]);
-        console.error("History fetch failed");
+      setConversations([]);
+      console.error("History fetch failed");
     }
   }, [user, setConversations, selectedConversation, fetchMessages, resetToNewChat]);
 
@@ -77,10 +87,13 @@ export default function ChatInterface({ onTaskChange, onClose }: { onTaskChange?
   }, []);
 
   const handleSelectChat = async (id: number) => {
-    if (selectedConversation === id) return;
+    if (selectedConversation === id) {
+      setShowHistory(false);
+      return;
+    }
     setSelectedConversation(id);
     setMessages([]);
-    setIsMobileMenuOpen(false);
+    setShowHistory(false); // Close history drawer once a chat is selected
     await fetchMessages(id);
   };
 
@@ -111,6 +124,11 @@ export default function ChatInterface({ onTaskChange, onClose }: { onTaskChange?
       if (onTaskChange) onTaskChange();
     } catch (error) {
       console.error("Chat Error:", error);
+      setMessages((prev: any[]) => [...prev, {
+        id: Date.now(),
+        role: 'assistant',
+        content: "Sorry, I encountered an issue processing your request. Please try again."
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -118,7 +136,7 @@ export default function ChatInterface({ onTaskChange, onClose }: { onTaskChange?
 
   const handleDeleteChat = async (e: React.MouseEvent, id: number, title: string) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete "${title || 'Untitled Thread'}"?`)) {
+    if (window.confirm(`Delete thread "${title || 'Untitled'}"?`)) {
       try {
         await api.delete(`/chat/conversations/${id}`);
         setConversations((prev: any[]) => prev.filter(c => c.id !== id));
@@ -129,163 +147,211 @@ export default function ChatInterface({ onTaskChange, onClose }: { onTaskChange?
     }
   };
 
-  const SidebarContent = () => (
-    <>
-      <div className="p-4 border-b border-white/[0.05] flex justify-between items-center">
-        <Button
-          onClick={() => { resetToNewChat(); setIsMobileMenuOpen(false); }}
-          className="flex-1 bg-zinc-100 hover:bg-white text-black font-semibold text-xs h-9 rounded-lg transition-all active:scale-95"
-        >
-          <Plus className="h-3.5 w-3.5 mr-2" /> New Chat
-        </Button>
-        <button onClick={() => setIsMobileMenuOpen(false)} className="md:hidden ml-2 p-1 text-zinc-500">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <ScrollArea className="flex-1 px-2 py-3">
-        <div className="flex items-center gap-2 px-3 mb-3 text-zinc-500">
-          <History className="h-3 w-3" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-600">Recent Activity</span>
+  return (
+    <div className="relative flex h-full w-full bg-slate-950 text-slate-100 font-sans overflow-hidden">
+      {/* Sliding Conversations Drawer */}
+      <div 
+        className={cn(
+          "absolute inset-y-0 left-0 z-30 w-72 bg-slate-900 border-r border-slate-800 shadow-2xl flex flex-col transition-transform duration-300 ease-in-out",
+          showHistory ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
+        <div className="p-3.5 border-b border-slate-800 flex items-center justify-between">
+          <button
+            onClick={() => {
+              resetToNewChat();
+              setShowHistory(false);
+            }}
+            className="flex-1 inline-flex items-center justify-center gap-2 py-2 px-3 text-xs font-semibold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New Chat</span>
+          </button>
+          <button
+            onClick={() => setShowHistory(false)}
+            className="ml-2 p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            title="Close Drawer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
         </div>
-        <div className="space-y-0.5">
-          {conversations.length === 0 ? (
-            <p className="text-[11px] text-zinc-600 px-3 py-4 italic">No chat history yet</p>
-          ) : (
-            conversations.map((c: { id: number; title: string }) => (
-              <div
-                key={c.id}
-                className={cn(
-                  "group relative w-full flex items-center gap-1 px-2 py-1 rounded-md transition-all",
-                  selectedConversation === c.id ? "bg-blue-600/10 border border-blue-500/20" : "hover:bg-white/[0.03]"
-                )}
-              >
-                {/* 1. DELETE BUTTON (LEFT SIDE) */}
-                <button
-                  onClick={(e) => handleDeleteChat(e, c.id, c.title)}
-                  className="p-1 rounded-md text-zinc-400 hover:text-red-400 hover:bg-red-500/10 opacity-100 transition-all"
-                  title="Delete chat"
-                >
-                  <X className="h-3 w-3" />
-                </button>
 
-                {/* 2. OPEN CHAT BUTTON */}
-                <button
+        <ScrollArea className="flex-1 px-2 py-3">
+          <div className="flex items-center gap-2 px-3 mb-2 text-slate-500">
+            <History className="w-3 h-3" />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Chat History</span>
+          </div>
+
+          <div className="space-y-1">
+            {conversations.length === 0 ? (
+              <p className="text-xs text-slate-500 px-3 py-4 italic">No conversation history</p>
+            ) : (
+              conversations.map((c: { id: number; title: string }) => (
+                <div
+                  key={c.id}
                   onClick={() => handleSelectChat(c.id)}
                   className={cn(
-                    "flex-1 flex items-center gap-2.5 py-1.5 overflow-hidden text-left transition-colors",
-                    selectedConversation === c.id ? "text-blue-400" : "text-zinc-500 group-hover:text-zinc-200"
+                    "group relative w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs cursor-pointer transition",
+                    selectedConversation === c.id
+                      ? "bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 font-medium"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-white"
                   )}
                 >
-                  <MessageSquare className={cn("h-3.5 w-3.5 shrink-0", selectedConversation === c.id ? "text-blue-400" : "text-zinc-600")} />
-                  <span className="truncate text-[12px]">{c.title || "Untitled Thread"}</span>
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </ScrollArea>
-    </>
-  );
-
-  return (
-    <div className="flex h-full w-full bg-[#09090b] text-zinc-300 font-sans selection:bg-blue-500/30 overflow-hidden relative">
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-black/60 z-40 md:hidden backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-      )}
-
-      <aside className={cn(
-        "fixed inset-y-0 left-0 z-50 w-64 bg-[#0c0c0e] border-r border-white/[0.05] transition-transform duration-300 md:relative md:translate-x-0 md:flex md:flex-col md:w-56 shrink-0",
-        isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
-        <SidebarContent />
-      </aside>
-
-      <main className="flex-1 flex flex-col bg-[#09090b] relative w-full">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,_rgba(59,130,246,0.05),transparent_50%)] pointer-events-none" />
-
-        <header className="h-14 flex items-center justify-between px-4 md:px-6 border-b border-white/[0.05] z-10 backdrop-blur-sm">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setIsMobileMenuOpen(true)} className="md:hidden p-1.5 hover:bg-white/10 rounded-md text-zinc-400">
-              <Menu className="h-5 w-5" />
-            </button>
-            <div className="flex items-center">
-              <Sparkles className="h-4 w-4 text-blue-500 mr-2" />
-              <h2 className="text-[10px] md:text-xs font-semibold tracking-widest uppercase text-zinc-400 truncate">Todo Manager AI</h2>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-md transition-colors text-zinc-500 hover:text-zinc-200">
-            <X className="h-4 w-4" />
-          </button>
-        </header>
-
-        <ScrollArea ref={scrollRef} className="flex-1 p-4 md:p-6 relative z-10">
-          <div className="max-w-3xl mx-auto space-y-8">
-            {isMessagesLoading ? (
-              <div className="h-[60vh] flex flex-col items-center justify-center space-y-4">
-                <Loader2 className="h-8 w-8 text-blue-500 animate-spin opacity-50" />
-                <p className="text-xs font-medium text-zinc-600 uppercase tracking-tighter">Retrieving Encrypted History...</p>
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="h-[40vh] flex flex-col items-center justify-center text-center animate-in fade-in zoom-in duration-500">
-                <div className="w-12 h-12 rounded-2xl bg-blue-600/10 flex items-center justify-center mb-4">
-                  <Bot className="text-blue-500 w-6 h-6" />
-                </div>
-                <h1 className="text-lg md:text-xl font-medium text-white mb-2">How can I assist you today?</h1>
-                <p className="text-zinc-500 text-xs md:text-sm max-w-xs">Manage tasks, update records, or brainstorm ideas with the AI Agent.</p>
-              </div>
-            ) : (
-              messages.map((m: { id: number | string; role: 'user' | 'assistant'; content: string }, i: number) => (
-                <div key={i} className={cn("flex gap-3 md:gap-4 group animate-in slide-in-from-bottom-2", m.role === 'user' ? "flex-row-reverse" : "flex-row")}>
-                  <div className={cn(
-                    "h-7 w-7 md:h-8 md:w-8 rounded-lg flex items-center justify-center shrink-0 shadow-sm border",
-                    m.role === 'assistant' ? "bg-blue-600/10 border-blue-500/20 text-blue-400" : "bg-zinc-800 border-zinc-700 text-zinc-400"
-                  )}>
-                    {m.role === 'assistant' ? <Bot className="h-4 w-4" /> : <User className="h-4 w-4" />}
-                  </div>
-                  <div className={cn(
-                    "px-3 py-2 md:px-4 md:py-3 rounded-2xl text-[13px] md:text-[14.5px] leading-relaxed shadow-sm max-w-[90%] md:max-w-[85%] transition-all",
-                    m.role === 'user' ? "bg-blue-600 text-white shadow-blue-900/20" : "bg-[#121214] border border-white/[0.06] text-zinc-200"
-                  )}>
-                    {m.content}
-                  </div>
+                  <span className="truncate flex-1 pr-2">{c.title || "Task Conversation"}</span>
+                  <button
+                    onClick={(e) => handleDeleteChat(e, c.id, c.title)}
+                    className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-400 transition-opacity p-1"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </div>
               ))
             )}
+          </div>
+        </ScrollArea>
+      </div>
+
+      {/* Main Chat Interface */}
+      <div className="flex-1 flex flex-col h-full bg-slate-950">
+        {/* Header with History Toggle Button */}
+        <div className="h-14 border-b border-slate-800 px-4 flex items-center justify-between bg-slate-900/40">
+          <div className="flex items-center gap-2.5">
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className={cn(
+                "p-1.5 rounded-lg border transition text-xs font-semibold flex items-center gap-1.5",
+                showHistory 
+                  ? "bg-indigo-600 border-indigo-500 text-white" 
+                  : "bg-slate-800/80 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white"
+              )}
+              title="Toggle Chat History"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span className="text-[11px]">History</span>
+            </button>
+
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-400 flex items-center justify-center">
+              <Bot className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-white">TaskFlow Copilot</span>
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30">
+                  Particle AI
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => resetToNewChat()}
+              className="p-1.5 text-xs text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition flex items-center gap-1"
+              title="Start New Chat"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline text-[11px]">New</span>
+            </button>
+            {onClose && (
+              <button 
+                onClick={onClose}
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Message Stream */}
+        <ScrollArea ref={scrollRef} className="flex-1 p-4">
+          <div className="max-w-3xl mx-auto space-y-4">
+            {messages.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center mx-auto mb-3">
+                  <Sparkles className="w-6 h-6 text-indigo-400" />
+                </div>
+                <h4 className="text-sm font-semibold text-white">How can I assist your tasks today?</h4>
+                <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                  Ask me to &ldquo;Add task prepare report for tomorrow&rdquo;, &ldquo;List pending tasks&rdquo;, or &ldquo;Mark task as completed&rdquo;.
+                </p>
+              </div>
+            ) : (
+              messages.map((m: any, idx: number) => {
+                const isUser = m.role === 'user';
+                return (
+                  <div
+                    key={m.id || idx}
+                    className={cn(
+                      "flex gap-3",
+                      isUser ? "justify-end" : "justify-start"
+                    )}
+                  >
+                    {!isUser && (
+                      <div className="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/30 flex items-center justify-center shrink-0 mt-0.5">
+                        <Bot className="w-4 h-4 text-indigo-400" />
+                      </div>
+                    )}
+                    <div
+                      className={cn(
+                        "rounded-2xl px-4 py-2.5 text-xs max-w-[80%] leading-relaxed whitespace-pre-wrap",
+                        isUser
+                          ? "bg-indigo-600 text-white rounded-tr-none shadow-md"
+                          : "bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none"
+                      )}
+                    >
+                      {m.content}
+                    </div>
+                    {isUser && (
+                      <div className="w-7 h-7 rounded-lg bg-slate-800 flex items-center justify-center shrink-0 mt-0.5">
+                        <User className="w-4 h-4 text-slate-400" />
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
 
             {isLoading && (
-              <div className="flex gap-4 animate-pulse">
-                <div className="h-8 w-8 rounded-lg bg-zinc-800" />
-                <div className="space-y-2 flex-1">
-                  <div className="h-3 bg-zinc-800 rounded w-1/4" />
-                  <div className="h-3 bg-zinc-800 rounded w-3/4" />
+              <div className="flex gap-3 items-center text-xs text-slate-400">
+                <div className="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/30 flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-indigo-400" />
+                </div>
+                <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-2 rounded-xl">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                  <span>AI Copilot is processing...</span>
                 </div>
               </div>
             )}
           </div>
         </ScrollArea>
 
-        <div className="p-4 md:p-6 bg-gradient-to-t from-[#09090b] via-[#09090b] to-transparent">
-          <div className="max-w-3xl mx-auto relative">
-            <textarea
+        {/* Input Bar */}
+        <div className="p-3 border-t border-slate-800 bg-slate-900/40">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSend();
+            }}
+            className="max-w-3xl mx-auto flex items-center gap-2"
+          >
+            <input
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
-              placeholder="Type your message here..."
-              className="w-full bg-[#121214] border border-white/[0.08] rounded-2xl p-3 md:p-4 pr-12 md:pr-14 text-[14px] md:text-[15px] resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/50 shadow-2xl transition-all min-h-[50px] md:min-h-[56px]"
-              rows={1}
+              placeholder="Type instruction (e.g., 'Add task review PR today')..."
+              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
+              disabled={isLoading}
             />
             <button
-              onClick={handleSend}
-              disabled={!inputValue.trim() || isLoading}
-              className="absolute right-2 bottom-2 md:right-3 md:bottom-3 p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all disabled:opacity-30 active:scale-90"
+              type="submit"
+              disabled={isLoading || !inputValue.trim()}
+              className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-40 transition shadow-sm"
             >
-              <Send className="h-4 w-4" />
+              <Send className="w-4 h-4" />
             </button>
-          </div>
-          <p className="text-[10px] text-center mt-3 text-zinc-600 uppercase tracking-widest">Powered by Model Context Protocol</p>
+          </form>
         </div>
-      </main>
+      </div>
     </div>
   );
 }

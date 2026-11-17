@@ -1,33 +1,96 @@
 # Default values for todo-app
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-replicaCount: 1
 
-image:
+# Image configurations
+images:
   backend:
     repository: todo-backend
     tag: v1
+    pullPolicy: IfNotPresent
   frontend:
     repository: todo-frontend
     tag: v1
-  pullPolicy: IfNotPresent
+    pullPolicy: IfNotPresent
+  notification:
+    repository: todo-notification-service
+    tag: v1
+    pullPolicy: IfNotPresent
+  recurring:
+    repository: todo-recurring-task-service
+    tag: v1
+    pullPolicy: IfNotPresent
 
-service:
-  type: LoadBalancer
-  backendPort: 8000
-  frontendPort: 3000
+# Service configurations
+services:
+  backend:
+    port: 8000
+    type: ClusterIP
+  frontend:
+    port: 3000
+    type: LoadBalancer
+  notification:
+    port: 8001
+    type: ClusterIP
+  recurring:
+    port: 8002
+    type: ClusterIP
 
+# Resource configurations
 resources:
-  limits:
-    cpu: 500m
-    memory: 512Mi
-  requests:
-    cpu: 100m
-    memory: 128Mi
+  backend:
+    requests:
+      memory: "256Mi"
+      cpu: "200m"
+    limits:
+      memory: "1Gi"
+      cpu: "1000m"
+  frontend:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  notification:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
+  recurring:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "250m"
 
-# Spec-driven secrets from Phase IV config
+# Replicas
+replicaCount:
+  backend: 1
+  frontend: 1
+  notification: 1
+  recurring: 1
+
+# Dapr configuration
+dapr:
+  enabled: true
+  config: dapr-config
+
+# Kafka/Redpanda configuration
+kafka:
+  brokers: "redpanda:29092"
+  topics:
+    - task-events
+    - reminders
+    - task-updates
+
+# Database configuration
 database:
-  url: ""
+  url: "postgresql://user:password@postgres:5432/todo_db"
 
-openai:
-  apiKey: ""
+# External services
+externalServices:
+  smtp:
+    host: "smtp.gmail.com"
+    port: 587

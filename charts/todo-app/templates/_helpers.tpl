@@ -49,31 +49,3 @@ Selector labels
 app.kubernetes.io/name: {{ include "todo-app.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
-
-{{/*
-Backend fullname
-*/}}
-{{- define "todo-app.backend.fullname" -}}
-{{- printf "%s-backend" (include "todo-app.fullname" .) | trunc 63 | trimSuffix "-" }}
-{{- end }}
-
-{{/*
-Frontend fullname
-*/}}
-{{- define "todo-app.frontend.fullname" -}}
-{{- printf "%s-frontend" (include "todo-app.fullname" .) | trunc 63 | trimSuffix "-" }}
-{{- end }}
-
-{{/*
-Database secret name
-*/}}
-{{- define "todo-app.dbSecretName" -}}
-{{- printf "%s-db-secret" (include "todo-app.fullname" .) | trunc 63 | trimSuffix "-" }}
-{{- end }}
-
-{{/*
-OpenAI secret name
-*/}}
-{{- define "todo-app.openaiSecretName" -}}
-{{- printf "%s-openai-secret" (include "todo-app.fullname" .) | trunc 63 | trimSuffix "-" }}
-{{- end }}

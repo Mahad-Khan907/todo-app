@@ -7,7 +7,8 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
-import { Mail, Lock, ArrowLeft } from 'lucide-react';
+import { Mail, Lock, ArrowLeft, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
+import Link from 'next/link';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -31,7 +32,6 @@ const LoginPage = () => {
     defaultValues: { email: '', password: '' },
   });
 
-  // Redirect only if user is actually logged in
   useEffect(() => {
     if (!authLoading && user) {
       router.push('/dashboard');
@@ -44,128 +44,114 @@ const LoginPage = () => {
 
     try {
       await login(data.email, data.password);
-      // The router push is now exclusively handled by the useEffect hook
-      // which reacts to the change in the 'user' state.
     } catch (err: any) {
-      console.error('Login page error:', err);
-      // Display specific error message from backend if available
-      const message = err.response?.data?.detail || 'Invalid email or password';
-      setError(message);
+      console.error('Login error:', err);
+      setError(err?.response?.data?.detail || 'Invalid email or password. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Only show the full page loader during the initial auth check
-  // NOT during the login form submission
-  if (authLoading && !isSubmitting) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <p className="text-2xl font-bold bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-400 bg-clip-text text-transparent animate-pulse">
-          Loading...
-        </p>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-black text-white relative overflow-hidden flex items-center justify-center">
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-900/20 via-black to-indigo-900/20" />
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_center,rgba(30,58,138,0.15),transparent_70%)]" />
-      
-      <div className="fixed inset-0 pointer-events-none opacity-40">
-        <div className="absolute top-20 left-0 w-96 h-96 rounded-full blur-3xl bg-blue-500/20" />
-        <div className="absolute bottom-40 right-0 w-80 h-80 rounded-full blur-3xl bg-indigo-600/20" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full blur-3xl bg-cyan-600/10" />
-      </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 relative overflow-hidden font-sans">
+      {/* Glow Effects */}
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-gradient-to-b from-indigo-600/20 via-purple-600/10 to-transparent blur-3xl pointer-events-none -z-10" />
 
-      <div className="relative z-10 w-full max-w-md px-6">
-        <motion.button
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          onClick={() => router.push('/')}
-          className="flex items-center gap-2 text-cyan-300 hover:text-cyan-200 mb-8 transition"
-        >
-          <ArrowLeft size={20} />
-          Back to Home
-        </motion.button>
+      {/* Back button */}
+      <Link 
+        href="/"
+        className="absolute top-8 left-8 inline-flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors bg-slate-900/60 px-4 py-2 rounded-xl border border-slate-800"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Home
+      </Link>
 
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="relative"
-        >
-          <div className="absolute -inset-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl blur-xl opacity-30" />
-          
-          <div className="relative bg-black/60 backdrop-blur-2xl rounded-2xl border border-white/20 p-8 sm:p-10 shadow-2xl">
-            <div className="text-center mb-8">
-              <h2 className="text-4xl font-bold bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-400 bg-clip-text text-transparent">
-                Welcome Back
-              </h2>
-              <p className="mt-3 text-white/60">Sign in to your account</p>
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
+        <div className="text-center mb-8">
+          <div className="inline-flex w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-400 items-center justify-center shadow-lg shadow-indigo-500/25 mb-4 ring-1 ring-white/20">
+            <CheckCircle2 className="w-6 h-6 text-white" />
+          </div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white">Welcome back</h1>
+          <p className="text-sm text-slate-400 mt-2">Sign in to access your AI-powered task dashboard</p>
+        </div>
+
+        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800/80 p-8 rounded-2xl shadow-2xl shadow-black/50">
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              className="p-3.5 mb-6 text-sm text-red-300 bg-red-950/40 border border-red-500/30 rounded-xl flex items-center gap-2"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+              <span>{error}</span>
+            </motion.div>
+          )}
+
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                <input
+                  type="email"
+                  {...register('email')}
+                  placeholder="name@example.com"
+                  className="w-full bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                />
+              </div>
+              {errors.email && (
+                <p className="text-xs text-red-400 mt-1.5">{errors.email.message}</p>
+              )}
             </div>
 
-            <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm text-center font-medium"
-                >
-                  {error}
-                </motion.div>
-              )}
-
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2">
+                Password
+              </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={20} />
+                <Lock className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                 <input
-                  {...register('email')}
-                  type="email"
-                  placeholder="Email address"
-                  className={`w-full pl-12 pr-4 py-4 rounded-xl bg-white/10 border ${
-                    errors.email ? 'border-red-500/50' : 'border-white/20'
-                  } focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition placeholder:text-white/40`}
-                />
-                {errors.email && (
-                  <p className="mt-2 text-sm text-red-400">{errors.email.message}</p>
-                )}
-              </div>
-
-              <div className="relative">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/40" size={20} />
-                <input
-                  {...register('password')}
                   type="password"
-                  placeholder="Password"
-                  className={`w-full pl-12 pr-4 py-4 rounded-xl bg-white/10 border ${
-                    errors.password ? 'border-red-500/50' : 'border-white/20'
-                  } focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/20 transition placeholder:text-white/40`}
+                  {...register('password')}
+                  placeholder="••••••••"
+                  className="w-full bg-slate-950/70 border border-slate-800 focus:border-indigo-500 rounded-xl pl-11 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all"
                 />
-                {errors.password && (
-                  <p className="mt-2 text-sm text-red-400">{errors.password.message}</p>
-                )}
               </div>
+              {errors.password && (
+                <p className="text-xs text-red-400 mt-1.5">{errors.password.message}</p>
+              )}
+            </div>
 
-              <div className="text-center">
-                <a href="/register" className="text-cyan-300 hover:text-cyan-200 underline transition text-sm">
-                  Don't have an account? Register here
-                </a>
-              </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-3.5 px-4 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-indigo-600 via-indigo-500 to-cyan-500 shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Signing in...</span>
+                </>
+              ) : (
+                <span>Sign in to Dashboard</span>
+              )}
+            </button>
+          </form>
 
-              <motion.button
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-4 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-700 to-cyan-600 text-white font-bold shadow-2xl shadow-blue-500/40 hover:shadow-blue-500/60 disabled:opacity-70 disabled:cursor-not-allowed transition"
-              >
-                {isSubmitting ? 'Signing in...' : 'Sign In'}
-              </motion.button>
-            </form>
+          <div className="mt-6 text-center text-xs text-slate-400">
+            Don&apos;t have an account?{' '}
+            <Link href="/register" className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
+              Sign up free
+            </Link>
           </div>
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </div>
   );
 };

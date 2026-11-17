@@ -44,4 +44,7 @@ HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# Start the application with both web server and background scheduler
+# The scheduler is integrated into the FastAPI application, so starting the web server
+# also starts the background scheduler processes
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,6 +1,9 @@
 apiVersion: v2
 name: todo-app
-description: A Helm chart for the Todo AI Chatbot application
+description: A Helm chart for the Todo application with event-driven architecture
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
+maintainers:
+  - name: Todo Team
+    email: team@example.com

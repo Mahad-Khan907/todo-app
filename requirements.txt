@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+dapr-ext-fastapi
+sqlmodel==0.0.14
+sqlalchemy>=2.0.0,<2.1.0
+aiosqlite
+psycopg2-binary
+python-jose[cryptography]
+python-dotenv
+python-multipart
+bcrypt
+openai
+APScheduler

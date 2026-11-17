@@ -5,7 +5,7 @@ import axios, {
 } from 'axios'
 
 // No trailing slash in base URL (correct)
-const API_BASE_URL = 'http://127.0.0.1:8000'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' ? '' : 'http://127.0.0.1:8000')
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,

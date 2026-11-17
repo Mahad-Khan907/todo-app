@@ -60,6 +60,15 @@ class TaskBase(SQLModel):
     priority: str = Field(default="medium", regex="^(low|medium|high)$")
     due_date: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+    # Recurring task fields
+    is_recurring: bool = Field(default=False)
+    recurring_pattern: Optional[str] = Field(default=None, regex="^(daily|weekly|monthly|custom)$")
+    recurrence_id: Optional[str] = Field(default=None)  # To link instances of the same recurring series
+    last_occurrence_processed: Optional[datetime] = Field(default=None)  # Track when the last occurrence was processed
+    # Reminder fields
+    reminder_at: Optional[datetime] = None
+    last_notified: Optional[datetime] = None
+    reminder_sent: bool = Field(default=False)  # To prevent duplicate emails
 
 
 class Task(TaskBase, table=True):
@@ -71,6 +80,15 @@ class Task(TaskBase, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     tags: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    # Recurring task fields
+    is_recurring: bool = Field(default=False)
+    recurring_pattern: Optional[str] = Field(default=None, regex="^(daily|weekly|monthly|custom)$")
+    recurrence_id: Optional[str] = Field(default=None)  # To link instances of the same recurring series
+    last_occurrence_processed: Optional[datetime] = Field(default=None)  # Track when the last occurrence was processed
+    # Reminder fields
+    reminder_at: Optional[datetime] = None
+    last_notified: Optional[datetime] = None
+    reminder_sent: bool = Field(default=False)  # To prevent duplicate emails
 
     # Relationship to user
     user: "User" = Relationship(back_populates="tasks")
@@ -81,6 +99,13 @@ class TaskCreate(TaskBase):
     Schema for creating a new task.
     """
     tags: List[str] = Field(default_factory=list)
+    # Recurring task fields
+    is_recurring: bool = Field(default=False)
+    recurring_pattern: Optional[str] = Field(default=None, regex="^(daily|weekly|monthly|custom)$")
+    recurrence_id: Optional[str] = Field(default=None)  # To link instances of the same recurring series
+    last_occurrence_processed: Optional[datetime] = Field(default=None)  # Track when the last occurrence was processed
+    # Reminder fields
+    reminder_at: Optional[datetime] = None
 
 
 class TaskUpdate(SQLModel):
@@ -94,6 +119,15 @@ class TaskUpdate(SQLModel):
     due_date: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     tags: Optional[List[str]] = None
+    # Recurring task fields
+    is_recurring: Optional[bool] = None
+    recurring_pattern: Optional[str] = Field(default=None, regex="^(daily|weekly|monthly|custom)$")
+    recurrence_id: Optional[str] = Field(default=None)  # To link instances of the same recurring series
+    last_occurrence_processed: Optional[datetime] = Field(default=None)  # Track when the last occurrence was processed
+    # Reminder fields
+    reminder_at: Optional[datetime] = None
+    last_notified: Optional[datetime] = None
+    reminder_sent: bool = Field(default=False)  # To prevent duplicate emails
 
 
 class TaskPublic(TaskBase):
@@ -106,6 +140,15 @@ class TaskPublic(TaskBase):
     updated_at: datetime
     completed_at: Optional[datetime] = None
     tags: List[str] = Field(default_factory=list)
+    # Recurring task fields
+    is_recurring: bool
+    recurring_pattern: Optional[str]
+    recurrence_id: Optional[str]  # To link instances of the same recurring series
+    last_occurrence_processed: Optional[datetime] = None  # Track when the last occurrence was processed
+    # Reminder fields
+    reminder_at: Optional[datetime] = None
+    last_notified: Optional[datetime] = None
+    reminder_sent: bool = Field(default=False)  # To prevent duplicate emails
 
 
 class ConversationBase(SQLModel):

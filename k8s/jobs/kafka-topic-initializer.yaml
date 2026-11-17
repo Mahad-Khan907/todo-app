@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topic-initializer
+spec:
+  template:
+    spec:
+      containers:
+      - name: topic-initializer
+        image: confluentinc/cp-kafka:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          kafka-topics --create --topic task-events --bootstrap-server redpanda:29092 --partitions 3 --replication-factor 1
+          kafka-topics --create --topic reminders --bootstrap-server redpanda:29092 --partitions 3 --replication-factor 1
+          kafka-topics --create --topic task-updates --bootstrap-server redpanda:29092 --partitions 3 --replication-factor 1
+          echo "Kafka topics created successfully"
+        env:
+        - name: KAFKA_CFG_ZOOKEEPER_CONNECT
+          value: "zookeeper:2181"
+      restartPolicy: Never
+  backoffLimit: 4

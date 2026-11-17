@@ -4,8 +4,24 @@ import axios, {
   InternalAxiosRequestConfig,
 } from 'axios'
 
-// No trailing slash in base URL (correct)
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || (typeof window !== 'undefined' ? '' : 'http://127.0.0.1:8000')
+// If NEXT_PUBLIC_API_BASE_URL is set and not empty, use it.
+// In browser (deployed on Vercel or same origin), if empty or pointing to localhost when deployed, use relative '' so Vercel rewrites route to /api/index.py
+const getBaseUrl = () => {
+  if (typeof window !== 'undefined') {
+    const envUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    // When deployed (e.g. on Vercel), if env points to localhost:8000, ignore it and use relative path ''
+    if (!isLocalhost && (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
+      return '';
+    }
+    
+    return envUrl || (isLocalhost ? 'http://localhost:8000' : '');
+  }
+  return process.env.NEXT_PUBLIC_API_BASE_URL || 'http://127.0.0.1:8000';
+};
+
+const API_BASE_URL = getBaseUrl();
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
